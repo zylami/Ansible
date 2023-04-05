@@ -1,0 +1,49 @@
+---
+- hosts: db
+  become: true
+
+  vars_files:
+    - vars.yml
+  
+  pre_tasks:
+    - name : Update apt cache if needed.
+      apt:
+        upgrade: yes
+        update_cache: yes
+        cache_valid_time: 86400 #One day
+
+  handlers:
+    - name: restart solar
+      service: name=solr stare=restared
+
+  tasks:
+    - name: Install Java.
+      apt: name=openjdk-8-jdk state=present
+
+    - name: Download Solr.
+      get_url:
+        url: https://www.apache.org/dyn/closer.lua/solr/solr/{{ solr_version }}/solr-{{ solr_version }}-src.tgz?action=download
+        dest: "{{ download_dir }}/solar-{{ solar_version }}.tgz"
+        checksum: "{{ solr_checksum }}"
+
+    - name: Expand Solr.
+      unarchive:
+        src: "{{ download_dir }}/solr-{{ solr_version }}.tgz"
+        dest: "{{ download_dir }}"
+        remote_src: true
+        creates: "{{ download_dir }}/solr-{{ solr_version }}.REDME.txt"
+
+    - name: Run solr installation script
+      command: >
+        {{ download_dir }}/solr{{ solr_version }}/bin/install
+        {{ download_dir }}/solr{{ solr_version }}.tgz
+        -i /opt
+        -d /var/solr
+        -u solr
+        -s solr
+        -p 8093
+        creates={{ solr_dir}}/bin/solr
+
+    - name: Ensure solr is started and enabled at boot
+      service: name=solr state=started enabled=yes
+
